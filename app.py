@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 import math
 
-ip = request.remote_addr
+
 BACKUP_FOLDER = 'backup'
 LOG_FILE = 'ip_log.txt'
 
@@ -44,8 +44,9 @@ def index():
     if request.method == 'POST':
       file = request.files.get('file')
       if file and file.filename:
-          filename = file.filename
           ip = request.remote_addr
+          filename = file.filename
+          
 
           save_path = os.path.join(UPLOAD_FOLDER, filename)
           backup_path = os.path.join(BACKUP_FOLDER, filename)
