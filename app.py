@@ -8,13 +8,12 @@ UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 
-# Store file metadata in memory (for demo); in real use, save to DB or JSON file.
 files = []
 
 MAX_FILES = 50
 FILES_PER_PAGE = 5
 
-# Load existing files on startup
+
 def load_files():
     global files
     files = []
@@ -27,7 +26,7 @@ def load_files():
                 'date': created,
                 'path': fpath
             })
-    # Sort newest first
+
     files.sort(key=lambda x: x['date'], reverse=True)
 
 load_files()
@@ -48,7 +47,6 @@ def index():
                 'path': save_path
             })
 
-            # Keep max 50 files, delete oldest
             while len(files) > MAX_FILES:
                 old_file = files.pop()
                 try:
@@ -58,7 +56,6 @@ def index():
 
             return redirect(url_for('index'))
 
-    # Pagination handling
     page = request.args.get('page', '1')
     try:
         page = int(page)
@@ -75,7 +72,6 @@ def index():
     end = start + FILES_PER_PAGE
     files_page = files[start:end]
 
-    # Render basic HTML with inline template
     html = '''
     <html>
     <head>
@@ -133,7 +129,6 @@ def index():
     </body>
     </html>
     '''
-    # Add serial numbers starting from 1 + offset of page
     indexed_files = [(start + i + 1, f) for i, f in enumerate(files_page)]
 
     return render_template_string(html, files=indexed_files, page=page, total_pages=total_pages)
@@ -155,8 +150,6 @@ def delete_file(filename):
     files = [f for f in files if f['name'] != filename]
 
     return redirect(url_for('index'))
-if __name__ == '__main__':
-    app.run(debug=True)
     
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # use port from environment if available
