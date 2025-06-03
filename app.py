@@ -3,6 +3,13 @@ import os
 from datetime import datetime
 import math
 
+ip = request.remote_addr
+BACKUP_FOLDER = 'backup'
+LOG_FILE = 'ip_log.txt'
+
+os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
+
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
@@ -35,26 +42,39 @@ load_files()
 def index():
     global files
     if request.method == 'POST':
-        file = request.files.get('file')
-        if file and file.filename:
-            save_path = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(save_path)
+      file = request.files.get('file')
+      if file and file.filename:
+          filename = file.filename
+          ip = request.remote_addr
 
-            # Add new file to list
-            files.insert(0, {
-                'name': file.filename,
-                'date': datetime.now(),
-                'path': save_path
-            })
+          save_path = os.path.join(UPLOAD_FOLDER, filename)
+          backup_path = os.path.join(BACKUP_FOLDER, filename)
 
-            while len(files) > MAX_FILES:
-                old_file = files.pop()
-                try:
-                    os.remove(old_file['path'])
-                except:
-                    pass
+          # Save to main folder (shown in table)
+          file.save(save_path)
 
-            return redirect(url_for('index'))
+          # Save a copy in backup folder
+          file.seek(0)  # rewind file pointer
+          with open(backup_path, 'wb') as f:
+              f.write(file.read())
+
+          # Log IP address and file name
+          with open(LOG_FILE, 'a') as log:
+              now = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+              log.write(f"{filename} - {ip} - {now}\n")
+
+          # Add to in-memory list
+          files.insert(0, {
+              'name': filename,
+              'date': datetime.now(),
+              'path': save_path
+          })
+
+          # Trim to max 50 in visible list (but not delete actual files)
+          files[:] = files[:MAX_FILES]
+
+          return redirect(url_for('index'))
+
 
     page = request.args.get('page', '1')
     try:
