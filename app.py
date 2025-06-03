@@ -171,7 +171,53 @@ def delete_file(filename):
     files = [f for f in files if f['name'] != filename]
 
     return redirect(url_for('index'))
-    
+
+# Secret admin page
+ADMIN_PASSWORD = "p@ss123"  # Change this to your secret password
+
+@app.route('/admin')
+def admin_page():
+    key = request.args.get('key', '')
+    if key != ADMIN_PASSWORD:
+        return "Unauthorized", 403
+
+    try:
+        with open(LOG_FILE, 'r') as log_file:
+            log_content = log_file.read()
+    except FileNotFoundError:
+        log_content = "No IP log available."
+
+    upload_list = os.listdir(UPLOAD_FOLDER)
+
+    admin_html = '''
+    <html>
+    <head>
+      <title>Admin Panel</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; }
+        h2 { margin-top: 30px; }
+        pre { background: #f4f4f4; padding: 10px; border: 1px solid #ccc; overflow-x: auto; }
+      </style>
+    </head>
+    <body>
+      <h1>Admin Panel</h1>
+
+      <h2>Uploaded Files</h2>
+      <ul>
+        {% for fname in uploads %}
+          <li><a href="/download/{{ fname }}">{{ fname }}</a></li>
+        {% endfor %}
+      </ul>
+
+      <h2>IP Log</h2>
+      <pre>{{ log }}</pre>
+    </body>
+    </html>
+    '''
+    return render_template_string(admin_html, uploads=upload_list, log=log_content)
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))  # use port from environment if available
     app.run(host='0.0.0.0', port=port)
+
