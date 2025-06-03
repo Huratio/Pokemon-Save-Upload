@@ -44,7 +44,8 @@ def index():
     if request.method == 'POST':
       file = request.files.get('file')
       if file and file.filename:
-          ip = request.remote_addr
+          ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+          user_agent = request.headers.get('User-Agent', 'Unknown')
           filename = file.filename
           
 
@@ -62,7 +63,8 @@ def index():
           # Log IP address and file name
           with open(LOG_FILE, 'a') as log:
               now = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-              log.write(f"{filename} - {ip} - {now}\n")
+              log.write(f"{filename} - {ip} - {now} - {user_agent}\n")
+
 
           # Add to in-memory list
           files.insert(0, {
@@ -173,7 +175,7 @@ def delete_file(filename):
     return redirect(url_for('index'))
 
 # Secret admin page
-ADMIN_PASSWORD = "p@ss123"  # Change this to your secret password
+ADMIN_PASSWORD = "suck"  # Change this to your secret password
 
 @app.route('/admin')
 def admin_page():
