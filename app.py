@@ -1,171 +1,113 @@
-from flask import Flask, request, redirect, url_for, send_from_directory, render_template_string
-import os, json
+import os
 from datetime import datetime
 import math
 
-UPLOAD_FOLDER = 'uploads'
+
 BACKUP_FOLDER = 'backup'
 LOG_FILE = 'ip_log.txt'
-FILES_JSON = 'files.json'
+
+os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
+
+app = Flask(__name__)
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+files = []
+
 MAX_FILES = 50
 FILES_PER_PAGE = 5
 
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(BACKUP_FOLDER, exist_ok=True)
 
-app = Flask(__name__)
-files = []
-
-def save_files_metadata():
-    with open(FILES_JSON, 'w') as f:
-        json.dump([
-            {
-                'name': file['name'],
-                'date': file['date'].isoformat(),
-                'path': file['path']
-            } for file in files
-        ], f)
-
-def load_files_metadata():
+def load_files():
     global files
-    files.clear()
-    if os.path.exists(FILES_JSON):
-        with open(FILES_JSON, 'r') as f:
-            try:
-                data = json.load(f)
-                for item in data:
-                    files.append({
-                        'name': item['name'],
-                        'date': datetime.fromisoformat(item['date']),
-                        'path': item['path']
-                    })
-            except Exception:
-                pass  # fallback: leave files empty
+    files = []
+    for fname in os.listdir(UPLOAD_FOLDER):
+        fpath = os.path.join(UPLOAD_FOLDER, fname)
+        if os.path.isfile(fpath):
+            created = datetime.fromtimestamp(os.path.getctime(fpath))
+            files.append({
+                'name': fname,
+                'date': created,
+                'path': fpath
+            })
 
-load_files_metadata()
+    files.sort(key=lambda x: x['date'], reverse=True)
+
+load_files()
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     global files
     if request.method == 'POST':
-        file = request.files.get('file')
-        if file and file.filename:
-            ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
-            ua = request.headers.get('User-Agent', 'Unknown')
+      file = request.files.get('file')
+      if file and file.filename:
+          ip = request.remote_addr
+          ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+          user_agent = request.headers.get('User-Agent', 'Unknown')
+          filename = file.filename
 
-            filename = file.filename
-            save_path = os.path.join(UPLOAD_FOLDER, filename)
-            backup_path = os.path.join(BACKUP_FOLDER, filename)
 
-            file.save(save_path)
-            file.seek(0)
-            with open(backup_path, 'wb') as f:
-                f.write(file.read())
+@@ -62,7 +63,8 @@
+          # Log IP address and file name
+          with open(LOG_FILE, 'a') as log:
+              now = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+              log.write(f"{filename} - {ip} - {now}\n")
+              log.write(f"{filename} - {ip} - {now} - {user_agent}\n")
 
-            with open(LOG_FILE, 'a') as log:
-                now = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-                log.write(f"{filename} - {ip} - {now} - {ua}\n")
 
-            files.insert(0, {
-                'name': filename,
-                'date': datetime.now(),
-                'path': save_path
-            })
+          # Add to in-memory list
+          files.insert(0, {
+@@ -173,51 +175,51 @@
+    return redirect(url_for('index'))
 
-            files[:] = files[:MAX_FILES]
-            save_files_metadata()
+# Secret admin page
+ADMIN_PASSWORD = "p@ss123"  # Change this to your secret password
+ADMIN_PASSWORD = "suck"  # Change this to your secret password
 
-            return redirect(url_for('index'))
+@app.route('/admin')
+def admin_page():
+    key = request.args.get('key', '')
+    if key != ADMIN_PASSWORD:
+        return "Unauthorized", 403
 
-    page = request.args.get('page', '1')
     try:
-        page = max(int(page), 1)
-    except:
-        page = 1
+        with open(LOG_FILE, 'r') as log_file:
+            log_content = log_file.read()
+    except FileNotFoundError:
+        log_content = "No IP log available."
 
-    total_pages = math.ceil(len(files) / FILES_PER_PAGE)
-    page = min(page, total_pages) if total_pages > 0 else 1
+    upload_list = os.listdir(UPLOAD_FOLDER)
 
-    start = (page - 1) * FILES_PER_PAGE
-    end = start + FILES_PER_PAGE
-    files_page = files[start:end]
-
-    html = '''
+    admin_html = '''
     <html>
     <head>
-      <title>Pokemon Red Chapter Save Files</title>
+      <title>Admin Panel</title>
       <style>
-        table, th, td { border: 1px solid black; border-collapse: collapse; padding: 5px; }
-        th { background-color: #eee; }
-        nav a { margin: 0 5px; text-decoration: none; }
-        nav a.current { font-weight: bold; }
+        body { font-family: sans-serif; padding: 20px; }
+        h2 { margin-top: 30px; }
+        pre { background: #f4f4f4; padding: 10px; border: 1px solid #ccc; overflow-x: auto; }
       </style>
     </head>
     <body>
-      <h2>Upload Pokemon Red Chapter Save File</h2>
-      <form method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" required />
-        <input type="submit" value="Upload" />
-      </form>
+      <h1>Admin Panel</h1>
 
-      <h3>Save Files</h3>
-      <table>
-        <tr>
-          <th>Serial No</th>
-          <th>Name</th>
-          <th>Date</th>
-          <th>Download</th>
-          <th>Delete</th>
-        </tr>
-        {% for idx, f in files %}
-        <tr>
-          <td>{{ idx }}</td>
-          <td>{{ f.name }}</td>
-          <td>{{ f.date.strftime("%d/%m/%Y %H:%M:%S") }}</td>
-          <td><a href="/download/{{ f.name }}">Download</a></td>
-          <td><a href="/delete/{{ f.name }}" onclick="return confirm('Delete this file?')">Delete</a></td>
-        </tr>
+      <h2>Uploaded Files</h2>
+      <ul>
+        {% for fname in uploads %}
+          <li><a href="/download/{{ fname }}">{{ fname }}</a></li>
         {% endfor %}
-      </table>
+      </ul>
 
-      <nav>
-        {% if page > 1 %}
-          <a href="/?page={{ page-1 }}">Prev</a>
-        {% endif %}
-        {% for p in range(1, total_pages + 1) %}
-          {% if p == page %}
-            <a href="/?page={{ p }}" class="current">{{ p }}</a>
-          {% else %}
-            <a href="/?page={{ p }}">{{ p }}</a>
-          {% endif %}
-        {% endfor %}
-        {% if page < total_pages %}
-          <a href="/?page={{ page+1 }}">Next</a>
-        {% endif %}
-      </nav>
+      <h2>IP Log</h2>
+      <pre>{{ log }}</pre>
     </body>
     </html>
     '''
-    indexed_files = [(start + i + 1, f) for i, f in enumerate(files_page)]
-    return render_template_string(html, files=indexed_files, page=page, total_pages=total_pages)
+    return render_template_string(admin_html, uploads=upload_list, log=log_content)
 
-@app.route('/download/<filename>')
-def download(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=True)
-
-@app.route('/delete/<filename>')
-def delete_file(filename):
-    global files
-    file_path = os.path.join(UPLOAD_FOLDER, filename)
-
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-    files = [f for f in files if f['name'] != filename]
-    save_files_metadata()
-
-    return redirect(url_for('index'))
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 5000))  # use port from environment if available
     app.run(host='0.0.0.0', port=port)
